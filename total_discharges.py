@@ -6,6 +6,9 @@ print(df["Total Discharges"])
 
 df['Total Discharges'] = df['Total Discharges'].str.replace(',', '').astype(float)
 
+def get_data():
+    return df # For future use 
+
 plt.figure(figsize=(15, 8))
 plt.bar(df['Hospital Name'], df['Total Discharges'])
 
