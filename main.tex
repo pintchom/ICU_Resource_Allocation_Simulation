@@ -1,0 +1,91 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{booktabs}
+
+\title{Hospital Bed Allocation Problem}
+\author{Marcus Rothera, Max Pintchok, and William Petrik}
+\date{November 2024}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+To recap, this project is concerned with determining who gets a hospital bed and who does not based on their age and severity of injury/illness. Our objective is to determine at time-step t, whether an arriving patient gets a surgical bed based on whether their utility for treatment falls within an acceptance criteria.
+
+\section{Setup}
+To start we must generate a set of people $P = \{p_1, \dots p_n\}$, each with different condition severities (injuries, illness, etc). This is achieved by randomly sampling $n$ ($|P|$) patients based on distribution data on age and severity. Each of these people will eventually arrive at the hospital at $t_{p_i}$ (time of arrival for patient $p_i$). 
+\newline
+\newline
+The distribution data is as follows \dots
+\newline
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{c|c|c|c}
+        Age Group & Non-Urgent & Semi-Urgent & Urgent \\
+        \midrule
+        0-17 & 0.277 & 0.283 & 0.19  \\
+        18-44 & 0.469 & 0.446 & 0.403  \\
+        45-65 & 0.173 & 0.175 & 0.219 \\
+        65+ & 0.081 & 0.096 & 0.188 \\
+    \end{tabular}
+    \caption{Severity Distributions by Age}
+    \label{tab:PB}
+\end{table}
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{c|c}
+        Severity & Proportion \\
+        \midrule
+        Urgent & 0.612 \\
+        Semi-Urgent & 0.287 \\
+        Non-Urgent & 0.101 \\
+    \end{tabular}
+    \caption{Overall Severity Distribution}
+    \label{tab:PB}
+\end{table}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{Urgency Distributions - Unfairness Project.png}
+    \caption{Severity Distribution Data}
+    \label{fig:enter-label}
+\end{figure}
+
+\section{Defining Constants and Variables }
+
+$P = \{p_1, \dots p_n\}$ (Set of all patients)
+\newline
+\newline
+$p_i$ = patient $i$
+\newline
+\newline
+$n = |P|$ (Total number of patients)
+\newline
+\newline
+$\tau =  t_{i+1} - t_i $ (Amount of time between time-steps)
+\newline
+\newline
+$\lambda$ = Acceptance Threshold 
+\newline
+\newline
+$\epsilon$ = Growth factor of $\lambda$
+\newline
+\newline
+$m_t$ = Number of beds available at time $t$
+\newline
+\newline
+$\omega$ = Reserve beds
+\newline
+\newline
+Defining acceptance threshold over time \dots
+\begin{equation}
+    \lambda_i = \lambda_{i-1}(\epsilon(1 + (1 / m_{t-1})))
+\end{equation}
+
+\section{Algorithm}
+
+
+
+
+\end{document}
