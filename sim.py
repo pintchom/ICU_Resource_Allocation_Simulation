@@ -164,3 +164,10 @@ print(f"Total utility captured: {total_u_captured}")
 - Add more variance 
 - Determine better Growth factor 
 '''
+
+# TODO: Future Considerations
+'''
+- Age
+- Insurance payment
+- More personal sensitive attributes 
+'''
