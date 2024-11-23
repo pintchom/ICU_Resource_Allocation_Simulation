@@ -7,6 +7,7 @@ print(df["Total Discharges"])
 df['Total Discharges'] = df['Total Discharges'].str.replace(',', '').astype(float)
 
 def get_data():
+    print(df)
     return df # For future use 
 
 plt.figure(figsize=(15, 8))
