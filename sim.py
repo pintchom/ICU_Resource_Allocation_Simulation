@@ -1,6 +1,6 @@
 ################################################################################################################################################
 '''
-Simulating patient visits for 30 day based on distribution data from Mass General Hospital
+Simulating patient visits for 30 days based on distribution data from Mass General Hospital
 '''
 ################################################################################################################################################
 import time
@@ -8,20 +8,23 @@ import pandas as pd
 import numpy as np
 import random as r 
 import uuid
+import matplotlib.pyplot as plt
 ################################################################################################################################################
 '''Constants'''
-t_n = 24 * 60 # * 30 # total time in a day by minutes (8AM = 0, 8PM = 1440)
+t_n = 24 * 60 * 30 # total time in 30 days by minutes (8AM = 0, 8PM = 43200)
 tau = 1 # 1 minute arrival intervals
 m = 722 # Most recent report number of beds from Mass General Hospital (May 2024)
 e = 1.00181 # Growth factor for acceptance threshold
 lambd = 0.1 # acceptance threshold
-n = 12174 # (Jan 2023 average monthly visitors)
-n_day = n / 30 # Average daily visitors
+n_day = 100  # Reduce daily patients to a more realistic number
+n = n_day * 30  # Monthly total
+average_minutes_in_hospital = 2.3 * 24 * 60  # Reduce average stay to 2.3 days
+std_dev_minutes = average_minutes_in_hospital / 2  # Increase variance
 people = set() # TODO: set this to set of people
 leaving_times = {} # {time: number of people leaving}
-average_minutes_in_hospital =  457.1337082 # Average minutes in hospital from Mass General Hospital (May 2024)
-# TODO: Fluctuate average stay based on severity
+order_of_arrivals = {} # {time: [list of people]}
 total_u_captured = 0.0
+total_u_rejected = 0.0
 ################################################################################################################################################
 '''Distribution Data'''
 distribution_data = { # Per age group
@@ -64,7 +67,7 @@ class Person:
     dispatch_time: float = None # 0 -> Time t sub n 
     status: str = "" # "in bed", "dispatched", "at-home program", "waitlist"
     u: float # Utility
-    def __init__(self, severity: float, arrival_time: float, dispatch_time: float, u: float = 0.0, id: str = str(uuid.uuid4())):
+    def __init__(self, id: str, severity: float, arrival_time: float, dispatch_time: float, u: float = 0.0):
         # self.age = age
         self.severity = severity
         self.arrival_time = arrival_time
@@ -84,7 +87,7 @@ for i in range(m, -1, -1):
     if i == m:
         acceptance_thresholds[i] = 0.1
     else:
-        acceptance_thresholds[i] = acceptance_thresholds[i+1] * ((1 + (1 / (m + 1))))
+        acceptance_thresholds[i] = acceptance_thresholds[i+1] * (e * (1 + (1 / (m + 1))))
 # print(acceptance_thresholds)
 ################################################################################################################################################
 '''Generate Patients'''
@@ -98,69 +101,143 @@ for _ in range(n):
     else:
         severity = 'non_urgent'
 
-    # Determine arrival time based on arrival distribution data
+    # Determine arrival time based on arrival distribution data and day
+    day = r.randint(0, 29) # Random day in 30 day period
     arrival_bucket = r.random() * 100
     if arrival_bucket < arrival_times[severity]['0-359']:
-        arrival_time = r.randint(0, 359)
+        daily_arrival = r.randint(0, 359)
     elif arrival_bucket < arrival_times[severity]['0-359'] + arrival_times[severity]['360 - 839']:
-        arrival_time = r.randint(360, 839)
+        daily_arrival = r.randint(360, 839)
     else:
-        arrival_time = r.randint(840, 1439)
+        daily_arrival = r.randint(840, 1439)
+    
+    arrival_time = day * 24 * 60 + daily_arrival # Convert to minutes from start of month
     
     # determine utility 
     if severity == 'urgent':
         u = r.uniform(0.66, 0.99)
+        base_duration = average_minutes_in_hospital * r.uniform(0.7, 1.3)
+        stay_duration = int(np.random.normal(base_duration, std_dev_minutes))
     elif severity == 'semi_urgent':
         u = r.uniform(0.33, 0.66)
+        base_duration = average_minutes_in_hospital * 0.6 * r.uniform(0.7, 1.3)
+        stay_duration = int(np.random.normal(base_duration, std_dev_minutes))
     else:
         u = r.uniform(0, 0.33)
+        base_duration = average_minutes_in_hospital * 0.4 * r.uniform(0.7, 1.3)
+        stay_duration = int(np.random.normal(base_duration, std_dev_minutes))
     
-    p = Person(severity, arrival_time, None, u)
+    # Ensure stay duration is reasonable
+    stay_duration = max(30, min(stay_duration, average_minutes_in_hospital * 2))
+    
+    dispatch_time = arrival_time + stay_duration
+    p = Person(str(uuid.uuid4()), severity, arrival_time, dispatch_time, u)
+    if not dispatch_time in leaving_times:
+        leaving_times[dispatch_time] = []
+    leaving_times[dispatch_time].append(p)
+    if arrival_time not in order_of_arrivals:
+        order_of_arrivals[arrival_time] = []
+    order_of_arrivals[arrival_time].append(p)
     people.add(p)
 
 # Create results list to store data
 results = []
+utility_over_time = []
+rejected_utility_over_time = []
+beds_over_time = []
 
+# Sort arrival times
+arrival_times_sorted = sorted(order_of_arrivals.keys())
+
+# Process patients in order of arrival time
+print(leaving_times.keys())
 for t in range(t_n):
-    p = r.choice(list(people))  # Convert set to list for random selection
-    available_beds = m 
-    accepted = p.u > acceptance_thresholds[available_beds]
-    if m == 0:
-        accepted = False
-    if accepted:
-        print(f"{p.id} ACCEPTED !!! 🎉")
-        print(f"New remaining beds: {m}")
-        m -= 1
-        total_u_captured += p.u
-        decision = "ACCEPTED"
-    else:
-        print(f"{p.id} REJECTED !!! 😡")
-        print(f"New remaining beds: {m}")
-        decision = "REJECTED"
-    print()
+    if t in leaving_times:
+        for p in leaving_times[t]:
+            if p.status == "in bed":  # Only free up a bed if the person was actually using one
+                m = min(m + 1, 722)  # Don't exceed max capacity
     
-    # Add result to list
-    results.append({
-        'person_id': p.id,
-        'arrival_time': p.arrival_time,
-        'utility': p.u,
-        'decision': decision,
-        'remaining_beds': m
-    })
+    if t not in order_of_arrivals:
+        utility_over_time.append(total_u_captured)
+        rejected_utility_over_time.append(total_u_rejected)
+        beds_over_time.append(m)
+        continue
+        
+    for p in order_of_arrivals[t]:
+        available_beds = m
+        accepted = p.u > acceptance_thresholds[available_beds]
+        if m == 0:
+            accepted = False
+        if accepted:
+            p.status = "in bed"
+            m -= 1
+            total_u_captured += p.u
+            decision = "ACCEPTED"
+        else:
+            p.status = "rejected"
+            total_u_rejected += p.u
+            decision = "REJECTED"
+        print()
+        
+        # Add result to list
+        results.append({
+            'person_id': p.id,
+            'arrival_time': p.arrival_time,
+            'dispatch_time': p.dispatch_time,
+            'utility': p.u,
+            'decision': decision,
+            'remaining_beds': m
+        })
+    
+    utility_over_time.append(total_u_captured)
+    rejected_utility_over_time.append(total_u_rejected)
+    beds_over_time.append(m)
 
 # Create DataFrame and save to CSV
 df = pd.DataFrame(results)
-df.to_csv('sim_results.csv', index=False)
+df.to_csv('sim_results_1month.csv', index=False)
 
 print(f"Total utility captured: {total_u_captured}")
+print(f"Total utility rejected: {total_u_rejected}")
+
+# Plot results
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15, 15))
+
+# Plot total utility over time
+ax1.plot(utility_over_time, label='Captured Utility')
+ax1.plot(rejected_utility_over_time, label='Rejected Utility')
+ax1.set_title('Utility Over Time')
+ax1.set_xlabel('Time (minutes)')
+ax1.set_ylabel('Total Utility')
+ax1.legend()
+
+# Plot available beds over time
+ax2.plot(beds_over_time)
+ax2.set_title('Available Beds Over Time')
+ax2.set_xlabel('Time (minutes)')
+ax2.set_ylabel('Number of Beds')
+
+# Plot utility distribution
+accepted_utilities = df[df['decision'] == 'ACCEPTED']['utility']
+rejected_utilities = df[df['decision'] == 'REJECTED']['utility']
+
+ax3.hist([accepted_utilities, rejected_utilities], bins=50, label=['Accepted', 'Rejected'], alpha=0.7)
+ax3.set_title('Distribution of Patient Utilities')
+ax3.set_xlabel('Utility Value')
+ax3.set_ylabel('Frequency')
+ax3.legend()
+
+plt.tight_layout()
+plt.savefig('simulation_results.png')
+plt.show()
 
 # TODO
 '''
-- Sort people by arrival time 
-- At every time step, take a person IF their arrival time matches 
-- Fix p.id 
+- Sort people by arrival time  DONE
+- At every time step, take a person IF their arrival time matches DONE
+- Fix p.id  Done
 - At each time step, check if person is leaving and update remaining beds
-- Adjust for month instead of day 
+- Adjust for month instead of day DONE
 - Add more variance 
 - Determine better Growth factor 
 '''
